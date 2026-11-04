@@ -7,9 +7,15 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { SlksProposalRecord } from './types/asn';
-import { DEFAULT_ASN_RECORDS, DEFAULT_USER_SHEET_URL } from './data/defaultAsnData';
+import { DEFAULT_ASN_RECORDS } from './data/defaultAsnData';
+import { APP_CONFIG } from './config/sheetConfig';
 import { NipCheckerTab } from './components/NipCheckerTab';
 import { GoogleSheetsTab } from './components/GoogleSheetsTab';
+import {
+  convertToGoogleSheetsCsvUrl,
+  parseCsv,
+  mapCsvToSlksRecords
+} from './utils/googleSheetsSync';
 
 const LOCAL_STORAGE_KEY = 'sip_slks_asn_records_v1';
 const LOCAL_STORAGE_SHEET_URL = 'sip_slks_sheet_url_v1';
@@ -20,34 +26,47 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'checker' | 'sheets'>('checker');
   const [selectedNip, setSelectedNip] = useState<string>('');
   const [sheetUrl, setSheetUrl] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_SHEET_URL) || DEFAULT_USER_SHEET_URL;
+    return localStorage.getItem(LOCAL_STORAGE_SHEET_URL) || APP_CONFIG.googleSheetUrl;
   });
 
   // Password admin untuk proteksi link Google Sheet (Default: admin123)
   const [adminPassword, setAdminPassword] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_PIN) || 'admin123';
+    return localStorage.getItem(LOCAL_STORAGE_PIN) || APP_CONFIG.adminPasswordDefault;
   });
 
   // Catatan manual dari admin untuk pegawai
   const [adminNotes, setAdminNotes] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_NOTES) || 'Pemberitahuan berkas dan syarat usulan Satyalancana disampaikan secara manual oleh Pengelola Kepegawaian.';
+    return localStorage.getItem(LOCAL_STORAGE_NOTES) || APP_CONFIG.defaultNotes;
   });
 
-  // Data ASN
-  const [asnRecords, setAsnRecords] = useState<SlksProposalRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+  // Data ASN (Menggunakan 244 data nyata dari Google Sheet yang terpasang permanen)
+  const [asnRecords, setAsnRecords] = useState<SlksProposalRecord[]>(DEFAULT_ASN_RECORDS);
+
+  // Otomatis sinkronkan langsung dengan Google Sheet setiap kali web dibuka oleh siapa saja
+  useEffect(() => {
+    const fetchLiveSheet = async () => {
+      try {
+        const targetUrl = sheetUrl || APP_CONFIG.googleSheetUrl;
+        const csvUrl = convertToGoogleSheetsCsvUrl(targetUrl);
+        const res = await fetch(csvUrl);
+        if (res.ok) {
+          const text = await res.text();
+          if (!text.includes('<!DOCTYPE html>') && !text.includes('Sign in to your Google Account')) {
+            const rows = parseCsv(text);
+            const liveRecords = mapCsvToSlksRecords(rows);
+            if (liveRecords.length > 0) {
+              setAsnRecords(liveRecords);
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(liveRecords));
+            }
+          }
         }
+      } catch (err) {
+        console.warn('Auto-fetch Google Sheet:', err);
       }
-    } catch (e) {
-      console.error(e);
-    }
-    return DEFAULT_ASN_RECORDS;
-  });
+    };
+
+    fetchLiveSheet();
+  }, [sheetUrl]);
 
   useEffect(() => {
     try {

@@ -109,22 +109,25 @@ export function mapCsvToSlksRecords(rows: string[][]): SlksProposalRecord[] {
     if (!rawNip || rawNip.length < 8) continue;
 
     const parsedNip = parseNip(rawNip);
-    const nama = colNama >= 0 && row[colNama] ? row[colNama] : `Pegawai ${rawNip}`;
-    const pangkatGol = colPangkat >= 0 && row[colPangkat] ? row[colPangkat] : '-';
-    const jabatan = colJabatan >= 0 && row[colJabatan] ? row[colJabatan] : 'Pegawai Negeri Sipil';
+    const nama = colNama >= 0 && row[colNama] ? row[colNama].trim() : `Pegawai ${rawNip}`;
+    const pangkatGol = colPangkat >= 0 && row[colPangkat] ? row[colPangkat].trim() : '-';
+    const jabatan = colJabatan >= 0 && row[colJabatan] ? row[colJabatan].trim() : 'Pegawai Negeri Sipil';
 
     // Estimasi usul jika kosong dari masa kerja
-    let usulSlks = colUsulSlks >= 0 && row[colUsulSlks] ? row[colUsulSlks] : '';
-    if (!usulSlks) {
+    let usulSlks = colUsulSlks >= 0 && row[colUsulSlks] ? row[colUsulSlks].trim() : '';
+    if (usulSlks === 'XXX') usulSlks = 'SLKS 30 Tahun (XXX)';
+    else if (usulSlks === 'XX') usulSlks = 'SLKS 20 Tahun (XX)';
+    else if (usulSlks === 'X') usulSlks = 'SLKS 10 Tahun (X)';
+    else if (!usulSlks) {
       const th = parsedNip.masaKerjaTahun ?? 10;
-      if (th >= 30) usulSlks = 'SLKS 30 Tahun (Emas)';
-      else if (th >= 20) usulSlks = 'SLKS 20 Tahun (Perak)';
-      else usulSlks = 'SLKS 10 Tahun (Perunggu)';
+      if (th >= 30) usulSlks = 'SLKS 30 Tahun (XXX)';
+      else if (th >= 20) usulSlks = 'SLKS 20 Tahun (XX)';
+      else usulSlks = 'SLKS 10 Tahun (X)';
     }
 
-    const tahunMengusulkan = colTahun >= 0 && row[colTahun] ? row[colTahun] : `${new Date().getFullYear()}`;
-    const periodeTahunUsulan = colPeriode >= 0 && row[colPeriode] ? row[colPeriode] : 'Periode 17 Agustus';
-    const status = colStatus >= 0 && row[colStatus] ? row[colStatus] : 'Dalam Proses Verifikasi';
+    const tahunMengusulkan = colTahun >= 0 && row[colTahun] ? row[colTahun].trim() : `${new Date().getFullYear()}`;
+    const periodeTahunUsulan = colPeriode >= 0 && row[colPeriode] ? row[colPeriode].trim() : 'Periode 17 Agustus';
+    const status = colStatus >= 0 && row[colStatus] ? row[colStatus].trim() : 'Dalam Proses Verifikasi';
 
     records.push({
       id: `sheet-${i}-${rawNip}`,

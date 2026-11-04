@@ -19,7 +19,7 @@ import {
   mapCsvToSlksRecords,
   generateSlksTemplateCsv
 } from '../utils/googleSheetsSync';
-import { DEFAULT_USER_SHEET_URL } from '../data/defaultAsnData';
+import { APP_CONFIG } from '../config/sheetConfig';
 
 interface GoogleSheetsTabProps {
   asnRecords: SlksProposalRecord[];
@@ -48,7 +48,7 @@ export const GoogleSheetsTab: React.FC<GoogleSheetsTabProps> = ({
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  const [inputUrl, setInputUrl] = useState(sheetUrl || DEFAULT_USER_SHEET_URL);
+  const [inputUrl, setInputUrl] = useState(sheetUrl || APP_CONFIG.googleSheetUrl);
   const [inputNotes, setInputNotes] = useState(adminNotes || '');
   const [pasteData, setPasteData] = useState('');
   const [showPasteBox, setShowPasteBox] = useState(false);
@@ -239,7 +239,7 @@ export const GoogleSheetsTab: React.FC<GoogleSheetsTabProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-slate-500">Tautan Spreadsheet:</span>
               <span className="font-mono text-slate-600 truncate max-w-[260px]">
-                {maskUrl(sheetUrl || DEFAULT_USER_SHEET_URL)}
+                {maskUrl(sheetUrl || APP_CONFIG.googleSheetUrl)}
               </span>
             </div>
           </div>
