@@ -1,0 +1,6 @@
+{
+  "name": "Cek Satyalancana Karya Satya",
+  "description": "Aplikasi satu halaman untuk memeriksa riwayat dan kelayakan penganugerahan tanda kehormatan Satyalancana Karya Satya (10, 20, 30 Tahun) berdasarkan NIP, dilengkapi integrasi data Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
