@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search,
-  Lock,
   Award,
   Shield,
-  FileSpreadsheet
+  RefreshCw,
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 import { SlksProposalRecord } from './types/asn';
 import { DEFAULT_ASN_RECORDS } from './data/defaultAsnData';
 import { APP_CONFIG } from './config/sheetConfig';
 import { NipCheckerTab } from './components/NipCheckerTab';
-import { GoogleSheetsTab } from './components/GoogleSheetsTab';
 import {
   convertToGoogleSheetsCsvUrl,
   parseCsv,
@@ -19,33 +18,28 @@ import {
 
 const LOCAL_STORAGE_KEY = 'sip_slks_asn_records_v1';
 const LOCAL_STORAGE_SHEET_URL = 'sip_slks_sheet_url_v1';
-const LOCAL_STORAGE_PIN = 'sip_slks_admin_pin_v1';
 const LOCAL_STORAGE_NOTES = 'sip_slks_admin_notes_v1';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'checker' | 'sheets'>('checker');
-  const [selectedNip, setSelectedNip] = useState<string>('');
-  const [sheetUrl, setSheetUrl] = useState<string>(() => {
+  const [sheetUrl] = useState<string>(() => {
     return localStorage.getItem(LOCAL_STORAGE_SHEET_URL) || APP_CONFIG.googleSheetUrl;
   });
 
-  // Password admin untuk proteksi link Google Sheet (Default: admin123)
-  const [adminPassword, setAdminPassword] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_PIN) || APP_CONFIG.adminPasswordDefault;
-  });
-
-  // Catatan manual dari admin untuk pegawai
-  const [adminNotes, setAdminNotes] = useState<string>(() => {
+  const [adminNotes] = useState<string>(() => {
     return localStorage.getItem(LOCAL_STORAGE_NOTES) || APP_CONFIG.defaultNotes;
   });
 
   // Data ASN (Menggunakan 244 data nyata dari Google Sheet yang terpasang permanen)
   const [asnRecords, setAsnRecords] = useState<SlksProposalRecord[]>(DEFAULT_ASN_RECORDS);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>('Live');
 
   // Otomatis sinkronkan langsung dengan Google Sheet setiap kali web dibuka oleh siapa saja
   useEffect(() => {
+    let isMounted = true;
     const fetchLiveSheet = async () => {
       try {
+        setIsSyncing(true);
         const targetUrl = sheetUrl || APP_CONFIG.googleSheetUrl;
         const csvUrl = convertToGoogleSheetsCsvUrl(targetUrl);
         const res = await fetch(csvUrl);
@@ -54,149 +48,83 @@ export default function App() {
           if (!text.includes('<!DOCTYPE html>') && !text.includes('Sign in to your Google Account')) {
             const rows = parseCsv(text);
             const liveRecords = mapCsvToSlksRecords(rows);
-            if (liveRecords.length > 0) {
+            if (liveRecords.length > 0 && isMounted) {
               setAsnRecords(liveRecords);
               localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(liveRecords));
+              const now = new Date();
+              setLastSyncTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`);
             }
           }
         }
       } catch (err) {
         console.warn('Auto-fetch Google Sheet:', err);
+      } finally {
+        if (isMounted) setIsSyncing(false);
       }
     };
 
     fetchLiveSheet();
+    return () => {
+      isMounted = false;
+    };
   }, [sheetUrl]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(asnRecords));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [asnRecords]);
-
-  useEffect(() => {
-    try {
-      const savedUrl = localStorage.getItem(LOCAL_STORAGE_SHEET_URL);
-      if (savedUrl) setSheetUrl(savedUrl);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  const handleSaveSheetUrl = (url: string) => {
-    setSheetUrl(url);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_SHEET_URL, url);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleUpdateAdminPassword = (newPass: string) => {
-    setAdminPassword(newPass);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_PIN, newPass);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleUpdateAdminNotes = (notes: string) => {
-    setAdminNotes(notes);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_NOTES, notes);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleResetDefault = () => {
-    setAsnRecords(DEFAULT_ASN_RECORDS);
-    localStorage.removeItem(LOCAL_STORAGE_KEY);
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Header Sederhana & Bersih */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100/90 via-slate-50 to-slate-100/60 text-slate-900 flex flex-col font-sans selection:bg-amber-400 selection:text-slate-950">
+      {/* Header Modern Tanpa Tab */}
+      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          {/* Logo & Judul */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-900 text-amber-400 flex items-center justify-center font-bold">
-              <Award className="w-4 h-4 text-amber-400" />
+          {/* Logo & Judul Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-950 to-slate-800 text-amber-400 flex items-center justify-center font-bold shadow-md shadow-slate-950/10 border border-slate-700/40">
+              <Award className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <span className="text-sm font-extrabold text-slate-900 block leading-tight">
+              <span className="text-base font-black tracking-tight text-slate-900 block leading-tight">
                 SIP-SLKS
               </span>
-              <span className="text-[10px] text-slate-500 block leading-none">
-                Cek Satyalancana Karya Satya
+              <span className="text-[11px] font-medium text-slate-500 block leading-none mt-0.5">
+                Sistem Informasi Satyalancana Karya Satya
               </span>
             </div>
           </div>
 
-          {/* 2 Tab Sederhana */}
-          <nav className="flex items-center gap-1.5 text-xs font-semibold">
-            <button
-              onClick={() => setActiveTab('checker')}
-              className={`px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'checker'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Cek NIP</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('sheets')}
-              className={`px-3.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'sheets'
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Data Google Sheet</span>
-              <Lock className="w-3 h-3 text-slate-400" />
-            </button>
-          </nav>
+          {/* Indikator Status Data Live Google Sheet */}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100/90 border border-slate-200/90 text-[11px] font-semibold text-slate-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="hidden sm:inline">Google Sheet Terhubung</span>
+              <span className="font-mono font-bold text-slate-900">
+                {asnRecords.length} Data
+              </span>
+              {isSyncing && (
+                <RefreshCw className="w-3 h-3 text-slate-400 animate-spin ml-0.5" />
+              )}
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Konten Utama */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {activeTab === 'checker' && (
-          <NipCheckerTab
-            asnRecords={asnRecords}
-            initialNip={selectedNip}
-            adminNotes={adminNotes}
-          />
-        )}
-
-        {activeTab === 'sheets' && (
-          <GoogleSheetsTab
-            asnRecords={asnRecords}
-            onUpdateRecords={setAsnRecords}
-            onResetDefault={handleResetDefault}
-            sheetUrl={sheetUrl}
-            onSaveSheetUrl={handleSaveSheetUrl}
-            adminPassword={adminPassword}
-            onUpdateAdminPassword={handleUpdateAdminPassword}
-            adminNotes={adminNotes}
-            onUpdateAdminNotes={handleUpdateAdminNotes}
-          />
-        )}
+      {/* Konten Utama 1 Halaman */}
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <NipCheckerTab
+          asnRecords={asnRecords}
+          adminNotes={adminNotes}
+        />
       </main>
 
-      {/* Footer Minimalis */}
-      <footer className="no-print bg-white border-t border-slate-200 mt-auto py-4">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex items-center justify-between text-[11px] text-slate-400">
-          <span>SIP-SLKS · Layanan Pemeriksaan Satyalancana Karya Satya</span>
-          <span>PP No. 35 Tahun 2010</span>
+      {/* Footer Minimalis & Bersih */}
+      <footer className="no-print bg-white/70 backdrop-blur border-t border-slate-200/80 mt-auto py-5">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <Shield className="w-3.5 h-3.5 text-amber-600" />
+            <span className="font-medium">
+              SIP-SLKS · Layanan Pemeriksaan Usulan Satyalancana Karya Satya
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400">
+            PP No. 35 Tahun 2010 Republik Indonesia
+          </span>
         </div>
       </footer>
     </div>

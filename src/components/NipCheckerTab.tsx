@@ -1,294 +1,409 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search,
-  Copy,
-  CheckCircle2,
-  Clock,
-  Printer,
+  X,
+  User,
+  Award,
+  Calendar,
+  Briefcase,
+  Layers,
   FileCheck2,
   AlertCircle,
-  HelpCircle
+  Clock,
+  Sparkles,
+  ChevronRight,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 import { SlksProposalRecord } from '../types/asn';
-import { formatNip } from '../utils/nipParser';
 
 interface NipCheckerTabProps {
   asnRecords: SlksProposalRecord[];
-  initialNip?: string;
+  initialQuery?: string;
   adminNotes?: string;
 }
 
 export const NipCheckerTab: React.FC<NipCheckerTabProps> = ({
   asnRecords,
-  initialNip = '',
+  initialQuery = '',
   adminNotes = ''
 }) => {
-  const [nipInput, setNipInput] = useState(initialNip || '');
-  const [copied, setCopied] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [selectedRecord, setSelectedRecord] = useState<SlksProposalRecord | null>(null);
 
   useEffect(() => {
-    if (initialNip) {
-      setNipInput(initialNip);
+    if (initialQuery) {
+      setSearchQuery(initialQuery);
     }
-  }, [initialNip]);
+  }, [initialQuery]);
 
-  const cleanNip = nipInput.replace(/\D/g, '');
+  const cleanQuery = searchQuery.trim();
+  const isNumericOnly = /^\d+$/.test(cleanQuery);
 
-  // Cari di database data pegawai berdasarkan NIP persis
-  const matchedRecord = asnRecords.find(r => r.nip.replace(/\D/g, '') === cleanNip);
+  // Live filter baik berdasarkan NIP maupun Nama
+  const searchResults = useMemo(() => {
+    if (!cleanQuery) return [];
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '');
-    if (val.length <= 18) {
-      setNipInput(val);
+    const qLower = cleanQuery.toLowerCase();
+    const qDigits = cleanQuery.replace(/\D/g, '');
+
+    return asnRecords.filter((record) => {
+      // Pencarian angka (NIP)
+      if (qDigits && record.nip.includes(qDigits)) {
+        return true;
+      }
+      // Pencarian huruf (Nama Lengkap)
+      if (record.nama.toLowerCase().includes(qLower)) {
+        return true;
+      }
+      return false;
+    });
+  }, [cleanQuery, asnRecords]);
+
+  // Otomatis tentukan record terpilih:
+  // 1. Jika query persis 18 digit NIP dan cocok
+  // 2. Atau jika hasil pencarian tepat 1 orang
+  // 3. Atau record yang dipilih pengguna secara manual
+  const activeRecord = useMemo(() => {
+    if (cleanQuery.length === 18 && isNumericOnly) {
+      const exactNip = asnRecords.find((r) => r.nip === cleanQuery);
+      if (exactNip) return exactNip;
     }
+
+    if (selectedRecord && searchResults.some((r) => r.id === selectedRecord.id)) {
+      return selectedRecord;
+    }
+
+    if (searchResults.length === 1) {
+      return searchResults[0];
+    }
+
+    return null;
+  }, [cleanQuery, isNumericOnly, asnRecords, searchResults, selectedRecord]);
+
+  const handleSelectPerson = (record: SlksProposalRecord) => {
+    setSelectedRecord(record);
+    // Jika mencari via nama, jangan hapus teks agar pengguna tetap tahu konteksnya
   };
 
-  const handleCopy = () => {
-    if (!matchedRecord) return;
-    const text = `DATA USULAN SATYALANCANA KARYA SATYA:
-STATUS: ${matchedRecord.status}
-NIP: ${matchedRecord.nip}
-NAMA: ${matchedRecord.nama}
-PANGKAT/GOL: ${matchedRecord.pangkatGol}
-JABATAN: ${matchedRecord.jabatan}
-USUL SLKS: ${matchedRecord.usulSlks}
-TAHUN MENGUSULKAN: ${matchedRecord.tahunMengusulkan}
-PERIODE TAHUN USULAN: ${matchedRecord.periodeTahunUsulan}`;
-
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSelectedRecord(null);
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // Status badge styling helper
-  const getStatusStyle = (statusStr: string) => {
-    const s = statusStr.toLowerCase();
+  // Status visual color configuration
+  const getStatusTheme = (statusStr: string) => {
+    const s = (statusStr || '').toLowerCase();
     if (s.includes('terbit') || s.includes('keppres') || s.includes('selesai') || s.includes('dianugerahi')) {
       return {
-        bgBanner: 'bg-emerald-950 text-emerald-50 border-emerald-800',
-        badge: 'bg-emerald-400 text-slate-950',
-        label: 'Sudah Diterbitkan SK / Dianugerahi',
-        accentBorder: 'border-emerald-500'
+        cardBg: 'bg-gradient-to-br from-emerald-950 via-slate-900 to-emerald-900',
+        badgeBg: 'bg-emerald-400 text-slate-950',
+        badgeLabel: 'SK Keppres Terbit / Dianugerahi',
+        glow: 'border-emerald-500/40 shadow-emerald-950/20',
+        accentText: 'text-emerald-300'
       };
     }
-    if (s.includes('bkn') || s.includes('setmilpres') || s.includes('verifikasi')) {
+    if (s.includes('perbaikan') || s.includes('tolak') || s.includes('catatan') || s.includes('disiplin')) {
       return {
-        bgBanner: 'bg-blue-950 text-blue-50 border-blue-800',
-        badge: 'bg-blue-400 text-slate-950',
-        label: 'Dalam Proses Pemeriksaan & Verifikasi',
-        accentBorder: 'border-blue-500'
+        cardBg: 'bg-gradient-to-br from-rose-950 via-slate-900 to-amber-950',
+        badgeBg: 'bg-rose-400 text-slate-950',
+        badgeLabel: 'Perlu Konfirmasi / Catatan',
+        glow: 'border-rose-500/40 shadow-rose-950/20',
+        accentText: 'text-rose-300'
       };
     }
-    if (s.includes('perbaikan') || s.includes('tidak') || s.includes('tolak') || s.includes('catatan')) {
-      return {
-        bgBanner: 'bg-rose-950 text-rose-50 border-rose-800',
-        badge: 'bg-rose-400 text-slate-950',
-        label: 'Perlu Konfirmasi / Catatan Berkas',
-        accentBorder: 'border-rose-500'
-      };
-    }
+    // Default: Dalam Proses Usulan (Kemendagri / BKN / Setmilpres)
     return {
-      bgBanner: 'bg-slate-900 text-white border-slate-700',
-      badge: 'bg-amber-400 text-slate-950',
-      label: 'Status Proses Usulan',
-      accentBorder: 'border-amber-500'
+      cardBg: 'bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950',
+      badgeBg: 'bg-amber-400 text-slate-950',
+      badgeLabel: 'Dalam Proses Verifikasi & Usulan',
+      glow: 'border-amber-400/30 shadow-slate-950/30',
+      accentText: 'text-amber-300'
     };
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Box Input NIP Tanpa Spasi */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-        <label className="block text-sm font-bold text-slate-900 mb-2">
-          Ketikkan NIP (18 Digit Angka Tanpa Spasi)
-        </label>
-        <div className="relative">
-          <input
-            type="text"
-            value={cleanNip}
-            onChange={handleInputChange}
-            placeholder="Ketik NIP..."
-            autoFocus
-            className="w-full pl-4 pr-24 py-3.5 text-base sm:text-lg font-mono font-bold tracking-normal text-slate-900 bg-slate-50 border-2 border-slate-300 rounded-xl focus:bg-white focus:border-slate-900 focus:outline-none transition-all"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-            {cleanNip && (
-              <button
-                onClick={() => setNipInput('')}
-                className="px-2 py-1 text-xs text-slate-400 hover:text-slate-600 rounded cursor-pointer"
-              >
-                Hapus
-              </button>
+    <div className="space-y-6">
+      {/* Search Header Hero - Minimalis, Elegan, Modern */}
+      <div className="relative overflow-hidden bg-white/80 backdrop-blur-md rounded-3xl border border-slate-200/90 p-6 sm:p-9 shadow-sm transition-all">
+        {/* Subtle decorative glow */}
+        <div className="absolute -top-24 -right-24 w-64 h-64 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-2xl mx-auto text-center space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/5 border border-slate-200 text-slate-700 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>Pemeriksaan Status Satyalancana Karya Satya</span>
+          </div>
+
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Lacak Posisi Usulan Satyalancana
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto leading-relaxed">
+            Ketik <span className="font-semibold text-slate-800">18 Digit NIP</span> atau ketik <span className="font-semibold text-slate-800">Nama Pegawai</span> untuk memeriksa posisi status usulan tanda kehormatan.
+          </p>
+
+          {/* Input Pencarian Universal (NIP atau Nama) */}
+          <div className="relative pt-2">
+            <div className="relative flex items-center">
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSelectedRecord(null);
+                }}
+                placeholder="Ketik NIP atau ketik Nama Pegawai (contoh: Novizar, 196711...)"
+                autoFocus
+                className="w-full pl-12 pr-20 py-4 text-base sm:text-lg font-medium text-slate-900 bg-slate-50/90 hover:bg-white focus:bg-white border-2 border-slate-200/90 focus:border-slate-900 rounded-2xl focus:outline-none transition-all shadow-inner"
+              />
+              <div className="absolute right-3 flex items-center gap-2">
+                {searchQuery && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Kosongkan pencarian"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <span className="text-[11px] font-mono font-bold bg-slate-200/70 text-slate-700 px-2.5 py-1 rounded-lg">
+                  {cleanQuery ? `${searchResults.length} Data` : `${asnRecords.length} Data`}
+                </span>
+              </div>
+            </div>
+
+            {/* Helper teks ringkas */}
+            {cleanQuery && !activeRecord && searchResults.length > 1 && (
+              <p className="text-left text-xs font-semibold text-slate-500 mt-2.5 flex items-center gap-1.5">
+                <span>Ditemukan {searchResults.length} pegawai yang cocok. Pilih salah satu di bawah:</span>
+              </p>
             )}
-            <span className="px-2.5 py-1 text-xs font-mono font-semibold bg-slate-200 text-slate-700 rounded-lg">
-              {cleanNip.length}/18
-            </span>
           </div>
         </div>
-
-        {cleanNip.length > 0 && cleanNip.length < 18 && (
-          <p className="text-xs text-slate-500 mt-2">
-            Masukkan 18 angka NIP lengkap (sisa {18 - cleanNip.length} angka lagi).
-          </p>
-        )}
       </div>
 
-      {/* Belum Ada Input */}
-      {cleanNip.length === 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 shadow-sm">
+      {/* Daftar Pilihan Jika Menemukan Banyak Hasil Nama */}
+      {cleanQuery && searchResults.length > 1 && !activeRecord && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm divide-y divide-slate-100">
+          <div className="p-3.5 bg-slate-50/70 text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+            <span>Daftar Pegawai Ditemukan ({searchResults.length})</span>
+            <span className="text-[11px] font-normal lowercase text-slate-400">Klik untuk melihat status usulan</span>
+          </div>
+
+          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+            {searchResults.map((rec) => (
+              <div
+                key={rec.id}
+                onClick={() => handleSelectPerson(rec)}
+                className="p-4 hover:bg-amber-50/40 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
+              >
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-900 text-sm group-hover:text-amber-900 transition-colors truncate">
+                      {rec.nama}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                      {rec.nip}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">
+                    {rec.pangkatGol} · {rec.jabatan}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="hidden sm:inline-block text-[11px] font-bold px-2 py-1 rounded-md bg-amber-100/70 text-amber-900 border border-amber-200">
+                    {rec.usulSlks}
+                  </span>
+                  <div className="p-1.5 rounded-lg bg-slate-100 group-hover:bg-slate-900 group-hover:text-white transition-all text-slate-500">
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Jika Belum Mengetik Apapun */}
+      {!cleanQuery && (
+        <div className="bg-white/80 backdrop-blur rounded-2xl border border-slate-200/80 p-12 text-center text-slate-400 shadow-sm">
           <Search className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-          <p className="text-sm font-medium text-slate-700">
-            Silakan ketikkan 18 angka NIP pegawai di atas.
+          <p className="text-sm font-semibold text-slate-700">
+            Ketik NIP atau Nama Pegawai untuk memulai pencarian
           </p>
           <p className="text-xs text-slate-400 mt-1">
-            Sistem akan langsung menampilkan posisi status usulan Satyalancana Karya Satya.
+            Data terhubung langsung dengan basis data usulan Satyalancana ({asnRecords.length} data pegawai).
           </p>
         </div>
       )}
 
-      {/* NIP 18 Digit Ditemukan: DITONJOLKAN STATUSNYA SAMPAI MANA */}
-      {cleanNip.length === 18 && matchedRecord && (
-        <div className="space-y-4">
-          {/* BANNER UTAMA STATUS (Sangat Ditonjolkan) */}
+      {/* Jika Tidak Ditemukan Hasil */}
+      {cleanQuery && searchResults.length === 0 && (
+        <div className="bg-white rounded-2xl border border-rose-200/80 p-8 text-center shadow-sm">
+          <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 border border-rose-200">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">
+            Data Tidak Ditemukan
+          </h3>
+          <p className="text-xs text-slate-600 max-w-md mx-auto mt-1 leading-relaxed">
+            Tidak ditemukan pegawai dengan kata kunci <span className="font-semibold text-slate-900">"{cleanQuery}"</span> dalam daftar usulan Satyalancana Karya Satya.
+          </p>
+          <p className="text-[11px] text-slate-400 mt-2">
+            Pastikan NIP (18 angka) atau ejaan nama sudah sesuai.
+          </p>
+        </div>
+      )}
+
+      {/* TAMPILAN DATA & STATUS TERKINI YANG SANGAT DITONJOLKAN */}
+      {activeRecord && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          {/* Card Status Hero yang Sangat Ditonjolkan */}
           {(() => {
-            const style = getStatusStyle(matchedRecord.status);
+            const theme = getStatusTheme(activeRecord.status);
             return (
-              <div className={`p-6 sm:p-7 rounded-2xl border-2 shadow-md ${style.bgBanner} ${style.accentBorder}`}>
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <div className="inline-flex items-center gap-2">
-                      <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md ${style.badge}`}>
-                        {style.label}
-                      </span>
-                    </div>
+              <div
+                className={`relative overflow-hidden p-6 sm:p-8 rounded-3xl border-2 text-white shadow-xl transition-all ${theme.cardBg} ${theme.glow}`}
+              >
+                {/* Visual watermark icon background */}
+                <Award className="absolute -bottom-8 -right-8 w-48 h-48 opacity-10 text-white pointer-events-none" />
 
-                    <div>
-                      <span className="text-xs text-slate-300 block font-medium">
-                        Posisi Status Usulan Terkini:
-                      </span>
-                      <h2 className="text-xl sm:text-2xl font-black tracking-tight mt-1 leading-snug">
-                        {matchedRecord.status}
-                      </h2>
-                    </div>
+                <div className="relative space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`text-[11px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full shadow-sm ${theme.badgeBg}`}
+                    >
+                      {theme.badgeLabel}
+                    </span>
 
-                    {matchedRecord.keterangan && (
-                      <p className="text-xs text-slate-300/90 pt-1">
-                        Keterangan: {matchedRecord.keterangan}
-                      </p>
+                    {/* Jika hasil filter banyak, tampilkan tombol kembali ke list */}
+                    {searchResults.length > 1 && (
+                      <button
+                        onClick={() => setSelectedRecord(null)}
+                        className="text-xs text-slate-300 hover:text-white underline cursor-pointer"
+                      >
+                        Pilih nama lain ({searchResults.length})
+                      </button>
                     )}
                   </div>
 
-                  {/* Tombol Aksi Salin & Cetak */}
-                  <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 no-print">
-                    <button
-                      onClick={handleCopy}
-                      className="px-3.5 py-2 text-xs font-semibold bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-white/20"
-                    >
-                      {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      <span>{copied ? 'Tersalin' : 'Salin Data'}</span>
-                    </button>
-                    <button
-                      onClick={handlePrint}
-                      className="px-3.5 py-2 text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <Printer className="w-4 h-4" />
-                      <span>Cetak</span>
-                    </button>
+                  <div>
+                    <span className="text-xs font-semibold text-slate-300 block uppercase tracking-wider">
+                      Posisi Status Usulan Terkini
+                    </span>
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight mt-1 leading-tight text-white">
+                      {activeRecord.status}
+                    </h1>
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-300/90 border-t border-white/10">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Periode: <strong className="text-white font-semibold">{activeRecord.periodeTahunUsulan}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Tahun Usulan: <strong className="text-white font-semibold">{activeRecord.tahunMengusulkan}</strong></span>
+                    </div>
                   </div>
                 </div>
               </div>
             );
           })()}
 
-          {/* Rincian Seluruh Data Pegawai */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-slate-100">
-              Rincian Data Pegawai & Usulan
-            </h4>
+          {/* Rincian Seluruh Data Pegawai (Grid Modern) */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100">
+              <h3 className="font-extrabold text-slate-900 text-sm sm:text-base flex items-center gap-2">
+                <User className="w-4 h-4 text-amber-600" />
+                <span>Rincian Data Usulan Pegawai</span>
+              </h3>
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                Terverifikasi
+              </span>
+            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {/* NIP (Tanpa Spasi) */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  NIP
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              {/* 1. NIP */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  NIP Pegawai
                 </span>
-                <span className="text-sm font-mono font-bold text-slate-900 block mt-1 tracking-normal">
-                  {matchedRecord.nip}
+                <span className="text-base font-mono font-extrabold text-slate-900 block mt-1 tracking-tight">
+                  {activeRecord.nip}
                 </span>
               </div>
 
-              {/* NAMA */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  NAMA
+              {/* 2. NAMA */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Nama Lengkap
                 </span>
-                <span className="text-sm font-bold text-slate-900 block mt-1">
-                  {matchedRecord.nama}
-                </span>
-              </div>
-
-              {/* PANGKAT/GOL */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  PANGKAT/GOL
-                </span>
-                <span className="text-xs font-bold text-slate-800 block mt-1">
-                  {matchedRecord.pangkatGol}
+                <span className="text-base font-extrabold text-slate-900 block mt-1 leading-snug">
+                  {activeRecord.nama}
                 </span>
               </div>
 
-              {/* JABATAN */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  JABATAN
+              {/* 3. PANGKAT/GOL */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Pangkat / Golongan
                 </span>
-                <span className="text-xs font-bold text-slate-800 block mt-1">
-                  {matchedRecord.jabatan}
-                </span>
-              </div>
-
-              {/* USUL SLKS */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  USUL SLKS
-                </span>
-                <span className="text-xs font-bold text-slate-900 block mt-1">
-                  {matchedRecord.usulSlks}
+                <span className="text-sm font-bold text-slate-800 block mt-1">
+                  {activeRecord.pangkatGol}
                 </span>
               </div>
 
-              {/* TAHUN MENGUSULKAN */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  TAHUN MENGUSULKAN
+              {/* 4. JABATAN */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Jabatan & Unit Kerja
                 </span>
-                <span className="text-xs font-bold text-slate-900 block mt-1">
-                  {matchedRecord.tahunMengusulkan}
-                </span>
-              </div>
-
-              {/* PERIODE TAHUN USULAN */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  PERIODE TAHUN USULAN
-                </span>
-                <span className="text-xs font-bold text-slate-900 block mt-1">
-                  {matchedRecord.periodeTahunUsulan}
+                <span className="text-xs font-medium text-slate-800 block mt-1 leading-relaxed">
+                  {activeRecord.jabatan}
                 </span>
               </div>
 
-              {/* STATUS */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-slate-500 font-semibold block text-[11px] uppercase tracking-wider">
-                  STATUS
+              {/* 5. USUL SLKS */}
+              <div className="p-4 bg-gradient-to-br from-amber-50/90 to-yellow-50/50 rounded-2xl border border-amber-200/80">
+                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
+                  Tingkatan Usulan SLKS
                 </span>
-                <span className="text-xs font-bold text-slate-900 block mt-1">
-                  {matchedRecord.status}
+                <span className="text-base font-black text-amber-950 block mt-1">
+                  {activeRecord.usulSlks}
+                </span>
+              </div>
+
+              {/* 6. TAHUN MENGUSULKAN */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Tahun Pengusulan
+                </span>
+                <span className="text-sm font-extrabold text-slate-900 block mt-1">
+                  {activeRecord.tahunMengusulkan}
+                </span>
+              </div>
+
+              {/* 7. PERIODE TAHUN USULAN */}
+              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100/90 hover:bg-slate-50 transition-colors">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Periode Tahun Usulan
+                </span>
+                <span className="text-sm font-extrabold text-slate-900 block mt-1">
+                  {activeRecord.periodeTahunUsulan}
+                </span>
+              </div>
+
+              {/* 8. STATUS */}
+              <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800">
+                <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                  Status Terkini
+                </span>
+                <span className="text-sm font-extrabold text-white block mt-1">
+                  {activeRecord.status}
                 </span>
               </div>
             </div>
@@ -296,31 +411,13 @@ PERIODE TAHUN USULAN: ${matchedRecord.periodeTahunUsulan}`;
         </div>
       )}
 
-      {/* NIP 18 Digit Tetapi Tidak Ditemukan di Database */}
-      {cleanNip.length === 18 && !matchedRecord && (
-        <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center shadow-sm">
-          <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 border border-rose-200">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-slate-900">
-            Data NIP Tidak Ditemukan
-          </h3>
-          <p className="text-xs text-slate-600 max-w-md mx-auto mt-1 leading-relaxed">
-            NIP <span className="font-mono font-bold text-slate-800">{cleanNip}</span> tidak terdaftar dalam basis data usulan Satyalancana Karya Satya.
-          </p>
-          <p className="text-[11px] text-slate-400 mt-2">
-            Pastikan NIP yang dimasukkan sudah benar atau hubungi pengelola kepegawaian.
-          </p>
-        </div>
-      )}
-
-      {/* Catatan Manual / Pengumuman Pengelola (Jika diisi) */}
+      {/* Catatan / Pengumuman Pengelola Jika Ada */}
       {adminNotes && (
-        <div className="p-4 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-start gap-2.5">
+        <div className="p-4 bg-slate-100/80 border border-slate-200/80 rounded-2xl text-xs text-slate-700 flex items-start gap-2.5">
           <Clock className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
           <div>
             <span className="font-bold text-slate-900 block">Pemberitahuan Pengelola:</span>
-            <p className="mt-0.5 leading-relaxed">{adminNotes}</p>
+            <p className="mt-0.5 leading-relaxed text-slate-600">{adminNotes}</p>
           </div>
         </div>
       )}
